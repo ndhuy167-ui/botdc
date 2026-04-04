@@ -40,6 +40,14 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 // ===== READY =====
 client.once('clientReady', () => {
     console.log(`✅ Bot online: ${client.user.tag}`);
+
+    client.user.setPresence({
+        activities: [{
+            name: '🎧 /play để phát nhạc',
+            type: 2 // LISTENING
+        }],
+        status: 'online'
+    });
 });
 
 // ===== HANDLE COMMAND =====
