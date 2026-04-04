@@ -1,6 +1,9 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, entersState, VoiceConnectionStatus } from '@discordjs/voice';
 import dotenv from 'dotenv';
+import gTTS from 'gtts';
+import fs from 'fs';
+import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
 
 dotenv.config();
 
@@ -109,5 +112,39 @@ client.on('interactionCreate', async interaction => {
 // ===== ANTI CRASH =====
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    if (!oldState.channel && newState.channel) {
+        const channel = newState.channel;
+        const user = newState.member.user;
+
+        const text = `Chào mừng ${user.username} đã đến nhà của Huy với Chill`;
+
+        const filePath = `./voice-${user.id}.mp3`;
+
+        // tạo file giọng nói
+        const gtts = new gTTS(text, 'vi');
+        gtts.save(filePath, async function (err) {
+            if (err) return console.log(err);
+
+            // join voice
+            const connection = joinVoiceChannel({
+                channelId: channel.id,
+                guildId: newState.guild.id,
+                adapterCreator: newState.guild.voiceAdapterCreator
+            });
+
+            const player = createAudioPlayer();
+            connection.subscribe(player);
+
+            const resource = createAudioResource(filePath);
+            player.play(resource);
+
+            player.on(AudioPlayerStatus.Idle, () => {
+                fs.unlinkSync(filePath); // xóa file sau khi phát
+            });
+        });
+    }
+});
 
 client.login(process.env.TOKEN);
