@@ -43,7 +43,7 @@ client.once('clientReady', () => {
 
     client.user.setPresence({
         activities: [{
-            name: '🎧 /play để phát nhạc',
+            name: 'Chỉ yêu mình Chill',
             type: 2 // LISTENING
         }],
         status: 'online'
