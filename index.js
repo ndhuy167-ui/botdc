@@ -19,16 +19,19 @@ const commands = [
         .setDescription('Cho bot rời voice')
 ].map(cmd => cmd.toJSON());
 
-// ===== REGISTER COMMAND =====
+// ===== REGISTER COMMAND (FIX HIỆN NGAY) =====
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
     try {
         await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
+            Routes.applicationGuildCommands(
+                process.env.CLIENT_ID,
+                process.env.GUILD_ID
+            ),
             { body: commands }
         );
-        console.log('✅ Đã đăng ký lệnh');
+        console.log('✅ Đã đăng ký lệnh (guild)');
     } catch (err) {
         console.error(err);
     }
@@ -43,7 +46,7 @@ client.once('clientReady', () => {
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    // JOIN
+    // ===== JOIN =====
     if (interaction.commandName === 'join') {
         const channel = interaction.member.voice.channel;
 
@@ -62,7 +65,7 @@ client.on('interactionCreate', async interaction => {
 
         console.log('🔊 Bot vào room');
 
-        // chống bị out
+        // 🔥 Anti disconnect
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
                 await Promise.race([
@@ -82,7 +85,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply('🔊 Bot đã vào!');
     }
 
-    // LEAVE
+    // ===== LEAVE =====
     if (interaction.commandName === 'leave') {
         const connection = getVoiceConnection(interaction.guild.id);
 
@@ -95,7 +98,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// anti crash
+// ===== ANTI CRASH =====
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
 
