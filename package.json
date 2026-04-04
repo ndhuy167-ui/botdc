@@ -11,5 +11,6 @@
     "@discordjs/voice": "^0.16.0",
     "dotenv": "^16.0.0",
     "play-dl": "^1.9.6"
+    "opusscript": "^0.0.8"
   }
 }
