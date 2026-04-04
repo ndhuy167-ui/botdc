@@ -11,12 +11,12 @@ const client = new Client({
 // ===== COMMAND =====
 const commands = [
     new SlashCommandBuilder()
-        .setName('join')
-        .setDescription('Gọi bot vào voice'),
+        .setName('chill')
+        .setDescription('Gọi Chill & Hyyy vào voice'),
 
     new SlashCommandBuilder()
         .setName('leave')
-        .setDescription('Cho bot rời voice')
+        .setDescription('Cho Chill & Hyyy rời voice')
 ].map(cmd => cmd.toJSON());
 
 // ===== REGISTER COMMAND (FIX HIỆN NGAY) =====
@@ -39,7 +39,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 // ===== READY =====
 client.once('clientReady', () => {
-    console.log(`✅ Bot online: ${client.user.tag}`);
+    console.log(`✅ Cục dàng của SoChill & Hyyy online: ${client.user.tag}`);
 
     client.user.setPresence({
         activities: [{
@@ -55,7 +55,7 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     // ===== JOIN =====
-    if (interaction.commandName === 'join') {
+    if (interaction.commandName === 'chill') {
         const channel = interaction.member.voice.channel;
 
         if (!channel) {
@@ -90,7 +90,7 @@ client.on('interactionCreate', async interaction => {
             }
         });
 
-        return interaction.reply('🔊 Bot đã vào!');
+        return interaction.reply('🔊 Cục dàng của SoChill & Hyyy đã vào ngôi nhà nhỏ!');
     }
 
     // ===== LEAVE =====
@@ -98,11 +98,11 @@ client.on('interactionCreate', async interaction => {
         const connection = getVoiceConnection(interaction.guild.id);
 
         if (!connection) {
-            return interaction.reply('❌ Bot chưa vào!');
+            return interaction.reply('❌ Cục dàng của SoChill & Hyyy chưa vào!');
         }
 
         connection.destroy();
-        return interaction.reply('👋 Bot đã out!');
+        return interaction.reply('👋 Cục dàng của SoChill & Hyyy đã out!');
     }
 });
 
