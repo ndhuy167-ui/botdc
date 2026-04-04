@@ -1,14 +1,5 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import { 
-    joinVoiceChannel, 
-    getVoiceConnection, 
-    createAudioPlayer, 
-    createAudioResource, 
-    AudioPlayerStatus,
-    entersState,
-    VoiceConnectionStatus
-} from '@discordjs/voice';
-import play from 'play-dl';
+import { joinVoiceChannel, getVoiceConnection, entersState, VoiceConnectionStatus } from '@discordjs/voice';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -17,25 +8,18 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates]
 });
 
-// ===== QUEUE =====
-const queues = new Map();
-
 // ===== COMMAND =====
 const commands = [
     new SlashCommandBuilder()
-        .setName('play')
-        .setDescription('Phát nhạc')
-        .addStringOption(opt =>
-            opt.setName('url').setDescription('Link YouTube').setRequired(true)
-        ),
+        .setName('join')
+        .setDescription('Gọi bot vào voice'),
 
-    new SlashCommandBuilder().setName('skip').setDescription('Bỏ bài'),
-    new SlashCommandBuilder().setName('stop').setDescription('Dừng nhạc'),
-    new SlashCommandBuilder().setName('queue').setDescription('Xem danh sách'),
-    new SlashCommandBuilder().setName('leave').setDescription('Rời voice')
+    new SlashCommandBuilder()
+        .setName('leave')
+        .setDescription('Cho bot rời voice')
 ].map(cmd => cmd.toJSON());
 
-// ===== REGISTER =====
+// ===== REGISTER COMMAND (FIX HIỆN NGAY) =====
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
@@ -47,7 +31,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
             ),
             { body: commands }
         );
-        console.log('✅ Commands ready');
+        console.log('✅ Đã đăng ký lệnh (guild)');
     } catch (err) {
         console.error(err);
     }
@@ -58,121 +42,59 @@ client.once('clientReady', () => {
     console.log(`✅ Bot online: ${client.user.tag}`);
 });
 
-// ===== PLAY NEXT =====
-async function playNext(guildId) {
-    const queue = queues.get(guildId);
-    if (!queue || queue.songs.length === 0) return;
-
-    const song = queue.songs[0];
-
-    const stream = await play.stream(song.url);
-
-    const resource = createAudioResource(stream.stream, {
-        inputType: stream.type
-    });
-
-    queue.player.play(resource);
-
-    queue.player.once(AudioPlayerStatus.Idle, () => {
-        queue.songs.shift();
-        playNext(guildId);
-    });
-}
-
 // ===== HANDLE COMMAND =====
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    const { commandName, guild, member } = interaction;
+    // ===== JOIN =====
+    if (interaction.commandName === 'join') {
+        const channel = interaction.member.voice.channel;
 
-    // ===== PLAY =====
-    if (commandName === 'play') {
-        const url = interaction.options.getString('url');
-        const channel = member.voice.channel;
-
-        if (!channel) return interaction.reply('❌ Vào voice trước!');
-
-        let queue = queues.get(guild.id);
-
-        if (!queue) {
-            const player = createAudioPlayer();
-
-            const connection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: guild.id,
-                adapterCreator: guild.voiceAdapterCreator
-            });
-
-            connection.subscribe(player);
-
-            // anti disconnect
-            connection.on(VoiceConnectionStatus.Disconnected, async () => {
-                try {
-                    await Promise.race([
-                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
-                    ]);
-                } catch {
-                    connection.destroy();
-                }
-            });
-
-            queue = {
-                player,
-                songs: []
-            };
-
-            queues.set(guild.id, queue);
+        if (!channel) {
+            return interaction.reply('❌ Vào voice trước!');
         }
 
-        queue.songs.push({ url });
+        const oldConnection = getVoiceConnection(interaction.guild.id);
+        if (oldConnection) oldConnection.destroy();
 
-        if (queue.songs.length === 1) {
-            playNext(guild.id);
-        }
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: interaction.guild.id,
+            adapterCreator: interaction.guild.voiceAdapterCreator
+        });
 
-        return interaction.reply('🎵 Đã thêm vào queue');
-    }
+        console.log('🔊 Bot vào room');
 
-    // ===== SKIP =====
-    if (commandName === 'skip') {
-        const queue = queues.get(guild.id);
-        if (!queue) return interaction.reply('❌ Không có nhạc');
+        // 🔥 Anti disconnect
+        connection.on(VoiceConnectionStatus.Disconnected, async () => {
+            try {
+                await Promise.race([
+                    entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                ]);
+            } catch {
+                console.log('❌ reconnect...');
+                joinVoiceChannel({
+                    channelId: channel.id,
+                    guildId: interaction.guild.id,
+                    adapterCreator: interaction.guild.voiceAdapterCreator
+                });
+            }
+        });
 
-        queue.player.stop();
-        return interaction.reply('⏭ Đã skip');
-    }
-
-    // ===== STOP =====
-    if (commandName === 'stop') {
-        const queue = queues.get(guild.id);
-        if (!queue) return interaction.reply('❌ Không có nhạc');
-
-        queue.songs = [];
-        queue.player.stop();
-
-        return interaction.reply('⏹ Đã dừng');
-    }
-
-    // ===== QUEUE =====
-    if (commandName === 'queue') {
-        const queue = queues.get(guild.id);
-        if (!queue || queue.songs.length === 0)
-            return interaction.reply('📭 Queue trống');
-
-        const list = queue.songs.map((s, i) => `${i + 1}. ${s.url}`).join('\n');
-
-        return interaction.reply(`📜 Queue:\n${list}`);
+        return interaction.reply('🔊 Bot đã vào!');
     }
 
     // ===== LEAVE =====
-    if (commandName === 'leave') {
-        const connection = getVoiceConnection(guild.id);
-        if (connection) connection.destroy();
+    if (interaction.commandName === 'leave') {
+        const connection = getVoiceConnection(interaction.guild.id);
 
-        queues.delete(guild.id);
+        if (!connection) {
+            return interaction.reply('❌ Bot chưa vào!');
+        }
 
-        return interaction.reply('👋 Bot đã rời');
+        connection.destroy();
+        return interaction.reply('👋 Bot đã out!');
     }
 });
 
