@@ -1,141 +1,85 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import { 
-    joinVoiceChannel, 
-    getVoiceConnection, 
-    entersState, 
-    VoiceConnectionStatus,
+import { Client, GatewayIntentBits } from 'discord.js';
+import {
+    joinVoiceChannel,
     createAudioPlayer,
     createAudioResource,
-    StreamType
+    AudioPlayerStatus,
+    entersState,
+    VoiceConnectionStatus,
+    getVoiceConnection
 } from '@discordjs/voice';
 import play from 'play-dl';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
-// ===== COMMAND =====
-const commands = [
-    new SlashCommandBuilder()
-        .setName('chill')
-        .setDescription('Gọi bot vào voice'),
-
-    new SlashCommandBuilder()
-        .setName('leave')
-        .setDescription('Cho bot rời voice'),
-
-    new SlashCommandBuilder()
-        .setName('play')
-        .setDescription('Phát nhạc YouTube')
-        .addStringOption(option =>
-            option.setName('url')
-                .setDescription('Link YouTube')
-                .setRequired(true)
-        )
-
-].map(cmd => cmd.toJSON());
-
-// ===== REGISTER COMMAND =====
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-(async () => {
-    try {
-        await rest.put(
-            Routes.applicationGuildCommands(
-                process.env.CLIENT_ID,
-                process.env.GUILD_ID
-            ),
-            { body: commands }
-        );
-        console.log('✅ Đã đăng ký lệnh (guild)');
-    } catch (err) {
-        console.error(err);
-    }
-})();
-
-// ===== READY =====
-client.once('clientReady', () => {
-    console.log(`✅ Bot online: ${client.user.tag}`);
+client.once("ready", () => {
+    console.log(`✅ Bot ready`);
 });
 
-// ===== HANDLE COMMAND =====
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    // ===== JOIN =====
-    if (interaction.commandName === 'chill') {
-        const channel = interaction.member.voice.channel;
-
-        if (!channel) {
-            return interaction.reply('❌ Vào voice trước!');
-        }
-
-        const connection = joinVoiceChannel({
-            channelId: channel.id,
-            guildId: interaction.guild.id,
-            adapterCreator: interaction.guild.voiceAdapterCreator
-        });
-
-        return interaction.reply('🔊 Bot đã vào voice!');
-    }
+client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
 
     // ===== PLAY =====
-    if (interaction.commandName === 'play') {
-        const url = interaction.options.getString('url');
-        const channel = interaction.member.voice.channel;
-    
-        if (!channel) {
-            return interaction.reply('❌ Vào voice trước!');
-        }
-    
-        // 🔥 QUAN TRỌNG
-        await interaction.deferReply();
-    
+    if (message.content.startsWith("!play")) {
+        const url = message.content.split(" ")[1];
+
+        if (!url) return message.reply("❌ Nhập link YouTube");
+
+        const vc = message.member.voice.channel;
+        if (!vc) return message.reply("❌ Vào voice trước");
+
         try {
             const connection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: interaction.guild.id,
-                adapterCreator: interaction.guild.voiceAdapterCreator
+                channelId: vc.id,
+                guildId: vc.guild.id,
+                adapterCreator: vc.guild.voiceAdapterCreator,
             });
-    
-            const stream = await play.stream(url, {
-                discordPlayerCompatibility: true
-            });
-    
+
+            await entersState(connection, VoiceConnectionStatus.Ready, 30000);
+
+            console.log("🎶 Playing:", url);
+
+            const stream = await play.stream(url);
+
             const resource = createAudioResource(stream.stream, {
                 inputType: stream.type
             });
-    
+
             const player = createAudioPlayer();
-    
-            player.play(resource);
+
             connection.subscribe(player);
-    
-            await interaction.editReply('🎶 Đang phát nhạc...');
-    
+            player.play(resource);
+
+            player.on(AudioPlayerStatus.Playing, () => {
+                console.log("✅ Đang phát");
+            });
+
+            player.on("error", err => {
+                console.error("❌ Player lỗi:", err);
+            });
+
         } catch (err) {
             console.error(err);
-            await interaction.editReply('❌ Lỗi phát nhạc!');
+            message.reply("❌ Lỗi phát nhạc");
         }
     }
-    // ===== LEAVE =====
-    if (interaction.commandName === 'leave') {
-        const connection = getVoiceConnection(interaction.guild.id);
 
-        if (!connection) {
-            return interaction.reply('❌ Bot chưa vào!');
+    // ===== STOP =====
+    if (message.content === "!stop") {
+        const connection = getVoiceConnection(message.guild.id);
+        if (connection) {
+            connection.destroy();
+            message.reply("⏹️ Đã dừng");
         }
-
-        connection.destroy();
-        return interaction.reply('👋 Bot đã out!');
     }
 });
 
-// ===== ANTI CRASH =====
-process.on('unhandledRejection', console.error);
-process.on('uncaughtException', console.error);
-
-client.login(process.env.TOKEN);
+// ⚠️ DÁN TOKEN TRỰC TIẾP ĐỂ TEST
+client.login("DÁN_TOKEN_VÀO_ĐÂY");
