@@ -1,5 +1,16 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, entersState, VoiceConnectionStatus } from '@discordjs/voice';
+import { 
+    joinVoiceChannel, 
+    getVoiceConnection, 
+    entersState, 
+    VoiceConnectionStatus,
+    createAudioPlayer,
+    createAudioResource,
+    StreamType
+} from '@discordjs/voice';
+import play from 'play-dl';
+import ffmpeg from 'ffmpeg-static';
+import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -12,14 +23,24 @@ const client = new Client({
 const commands = [
     new SlashCommandBuilder()
         .setName('chill')
-        .setDescription('Gọi Chill & Hyyy vào voice'),
+        .setDescription('Gọi bot vào voice'),
 
     new SlashCommandBuilder()
         .setName('leave')
-        .setDescription('Cho Chill & Hyyy rời voice')
+        .setDescription('Cho bot rời voice'),
+
+    new SlashCommandBuilder()
+        .setName('play')
+        .setDescription('Phát nhạc YouTube')
+        .addStringOption(option =>
+            option.setName('url')
+                .setDescription('Link YouTube')
+                .setRequired(true)
+        )
+
 ].map(cmd => cmd.toJSON());
 
-// ===== REGISTER COMMAND (FIX HIỆN NGAY) =====
+// ===== REGISTER COMMAND =====
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
@@ -39,15 +60,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 // ===== READY =====
 client.once('clientReady', () => {
-    console.log(`✅ Cục dàng của SoChill & Hyyy online: ${client.user.tag}`);
-
-    client.user.setPresence({
-        activities: [{
-            name: '💖 Chỉ yêu mình Chill',
-            type: 2 // LISTENING
-        }],
-        status: 'online'
-    });
+    console.log(`✅ Bot online: ${client.user.tag}`);
 });
 
 // ===== HANDLE COMMAND =====
@@ -62,8 +75,25 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply('❌ Vào voice trước!');
         }
 
-        const oldConnection = getVoiceConnection(interaction.guild.id);
-        if (oldConnection) oldConnection.destroy();
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: interaction.guild.id,
+            adapterCreator: interaction.guild.voiceAdapterCreator
+        });
+
+        return interaction.reply('🔊 Bot đã vào voice!');
+    }
+
+    // ===== PLAY =====
+    if (interaction.commandName === 'play') {
+        const url = interaction.options.getString('url');
+        const channel = interaction.member.voice.channel;
+
+        if (!channel) {
+            return interaction.reply('❌ Vào voice trước!');
+        }
+
+        await interaction.reply('🎶 Đang phát nhạc...');
 
         const connection = joinVoiceChannel({
             channelId: channel.id,
@@ -71,26 +101,26 @@ client.on('interactionCreate', async interaction => {
             adapterCreator: interaction.guild.voiceAdapterCreator
         });
 
-        console.log('🔊 Bot vào room');
+        const stream = await play.stream(url);
 
-        // 🔥 Anti disconnect
-        connection.on(VoiceConnectionStatus.Disconnected, async () => {
-            try {
-                await Promise.race([
-                    entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
-                ]);
-            } catch {
-                console.log('❌ reconnect...');
-                joinVoiceChannel({
-                    channelId: channel.id,
-                    guildId: interaction.guild.id,
-                    adapterCreator: interaction.guild.voiceAdapterCreator
-                });
-            }
+        const ffmpegProcess = spawn(ffmpeg, [
+            '-i', 'pipe:0',
+            '-f', 's16le',
+            '-ar', '48000',
+            '-ac', '2',
+            'pipe:1'
+        ], { stdio: ['pipe', 'pipe', 'ignore'] });
+
+        stream.stream.pipe(ffmpegProcess.stdin);
+
+        const resource = createAudioResource(ffmpegProcess.stdout, {
+            inputType: StreamType.Raw
         });
 
-        return interaction.reply('🔊 Cục dàng của SoChill & Hyyy đã vào ngôi nhà nhỏ!');
+        const player = createAudioPlayer();
+
+        player.play(resource);
+        connection.subscribe(player);
     }
 
     // ===== LEAVE =====
@@ -98,11 +128,11 @@ client.on('interactionCreate', async interaction => {
         const connection = getVoiceConnection(interaction.guild.id);
 
         if (!connection) {
-            return interaction.reply('❌ Cục dàng của SoChill & Hyyy chưa vào!');
+            return interaction.reply('❌ Bot chưa vào!');
         }
 
         connection.destroy();
-        return interaction.reply('👋 Cục dàng của SoChill & Hyyy đã out!');
+        return interaction.reply('👋 Bot đã out!');
     }
 });
 
