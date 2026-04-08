@@ -9,8 +9,6 @@ import {
     StreamType
 } from '@discordjs/voice';
 import play from 'play-dl';
-import ffmpeg from 'ffmpeg-static';
-import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
