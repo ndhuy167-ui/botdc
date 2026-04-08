@@ -93,37 +93,36 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply('❌ Vào voice trước!');
         }
     
-        await interaction.reply('🎶 Đang phát nhạc...');
+        // 🔥 QUAN TRỌNG
+        await interaction.deferReply();
     
-        const connection = joinVoiceChannel({
-            channelId: channel.id,
-            guildId: interaction.guild.id,
-            adapterCreator: interaction.guild.voiceAdapterCreator
-        });
+        try {
+            const connection = joinVoiceChannel({
+                channelId: channel.id,
+                guildId: interaction.guild.id,
+                adapterCreator: interaction.guild.voiceAdapterCreator
+            });
     
-        // 🔥 Lấy stream youtube
-        const stream = await play.stream(url, {
-            discordPlayerCompatibility: true
-        });
+            const stream = await play.stream(url, {
+                discordPlayerCompatibility: true
+            });
     
-        // 🔥 Tạo resource trực tiếp (KHÔNG cần ffmpeg)
-        const resource = createAudioResource(stream.stream, {
-            inputType: stream.type,
-            inlineVolume: true
-        });
+            const resource = createAudioResource(stream.stream, {
+                inputType: stream.type
+            });
     
-        const player = createAudioPlayer();
+            const player = createAudioPlayer();
     
-        player.play(resource);
-        connection.subscribe(player);
+            player.play(resource);
+            connection.subscribe(player);
     
-        player.on('error', error => {
-            console.error('❌ Player error:', error);
-        });
+            await interaction.editReply('🎶 Đang phát nhạc...');
     
-        console.log('🎵 Đang phát nhạc');
+        } catch (err) {
+            console.error(err);
+            await interaction.editReply('❌ Lỗi phát nhạc!');
+        }
     }
-
     // ===== LEAVE =====
     if (interaction.commandName === 'leave') {
         const connection = getVoiceConnection(interaction.guild.id);
