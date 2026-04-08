@@ -88,39 +88,40 @@ client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'play') {
         const url = interaction.options.getString('url');
         const channel = interaction.member.voice.channel;
-
+    
         if (!channel) {
             return interaction.reply('❌ Vào voice trước!');
         }
-
+    
         await interaction.reply('🎶 Đang phát nhạc...');
-
+    
         const connection = joinVoiceChannel({
             channelId: channel.id,
             guildId: interaction.guild.id,
             adapterCreator: interaction.guild.voiceAdapterCreator
         });
-
-        const stream = await play.stream(url);
-
-        const ffmpegProcess = spawn(ffmpeg, [
-            '-i', 'pipe:0',
-            '-f', 's16le',
-            '-ar', '48000',
-            '-ac', '2',
-            'pipe:1'
-        ], { stdio: ['pipe', 'pipe', 'ignore'] });
-
-        stream.stream.pipe(ffmpegProcess.stdin);
-
-        const resource = createAudioResource(ffmpegProcess.stdout, {
-            inputType: StreamType.Raw
+    
+        // 🔥 Lấy stream youtube
+        const stream = await play.stream(url, {
+            discordPlayerCompatibility: true
         });
-
+    
+        // 🔥 Tạo resource trực tiếp (KHÔNG cần ffmpeg)
+        const resource = createAudioResource(stream.stream, {
+            inputType: stream.type,
+            inlineVolume: true
+        });
+    
         const player = createAudioPlayer();
-
+    
         player.play(resource);
         connection.subscribe(player);
+    
+        player.on('error', error => {
+            console.error('❌ Player error:', error);
+        });
+    
+        console.log('🎵 Đang phát nhạc');
     }
 
     // ===== LEAVE =====
